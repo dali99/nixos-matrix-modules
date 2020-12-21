@@ -93,6 +93,23 @@ in
                   type = lib.types.port;
                   description = "the TCP port to bind to";
                 };
+                options.bind_addresses = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  description = "A list of local addresses to listen on";
+                };
+                options.tls = lib.mkOption {
+                  type = lib.types.bool;
+                  description = "set to true to enable TLS for this listener. Will use the TLS key/cert specified in tls_private_key_path / tls_certificate_path.";
+                  default = true;
+                };
+                options.x_forwarded = lib.mkOption {
+                  type = lib.types.bool;
+                  description = ''
+                    Only valid for an 'http' listener. Set to true to use the X-Forwarded-For header as the client IP.
+                    Useful when Synapse is behind a reverse-proxy.
+                  '';
+                  default = false;
+                };
                 options.resources = lib.mkOption {
                   type = lib.types.listOf (lib.types.submodule {
                     options.names = lib.mkOption {
@@ -403,13 +420,18 @@ in
       users.groups.matrix-synapse = {
         gid = config.ids.gids.matrix-synapse;
       };
+      systemd.targets.matrix-synapse = {
+        description = "Synapse parent target";
+        after = [ "network.target" ];
+        wantedBy = [ "multi-user.target" ];
+      };
     })
 
     (lib.mkIf cfg.enableMainSynapse {
       systemd.services.matrix-synapse = {
         description = "Synapse Matrix homeserver";
-        after = [ "network.target" ];
-        wantedBy = [ "multi-user.target" ];
+        partOf = [ "matrix-synapse.target" ];
+        wantedBy = [ "matrix-synapse.target" ];
         preStart = ''
         ${cfg.package}/bin/homeserver \
           ${ lib.concatMapStringsSep "\n  " (x: "--config-path ${x} \\") ([ matrix-synapse-common-config ] ++ cfg.extraConfigFiles) }
@@ -444,8 +466,9 @@ in
           name = "matrix-synapse-worker-${workerName worker}";
           value = {
             description = "Synapse Matrix Worker";
-            after = [  "network.target" ];
-            wantedBy = [ "multi-user.target" ];
+            partOf = [ "matrix-synapse.target" ];
+            wantedBy = [ "matrix-synapse.target" ];
+            after = [ "matrix-synapse.service" ];
             environment.PYTHONPATH = lib.makeSearchPathOutput "lib" cfg.package.python.sitePackages [
               pluginsEnv
 #              (cfg.package.python.pkgs.toPythonModule cfg.package)
