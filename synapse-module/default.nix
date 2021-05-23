@@ -14,7 +14,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-        default = pkgs.matrix-synapse;
+      default = pkgs.matrix-synapse;
     };
     
     plugins = lib.mkOption {
