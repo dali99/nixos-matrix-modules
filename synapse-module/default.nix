@@ -238,52 +238,6 @@ in
             }
           ];
         };
-        options.acme = {
-          enable = lib.mkOption {
-            type = lib.types.bool;
-            description = "ACME support requires tls_certificate_path and tls_private_key_path to be set";
-            default = false;
-          };
-          port = lib.mkOption {
-            type = lib.types.port;
-            description = "Port number to listen on for the HTTP-01 challenge. Change this if you are forwarding connections through Apache/Nginx/etc.";
-            default = 80;
-          };
-          bind_addresses = lib.mkOption {
-            type = lib.types.listOf lib.types.str;
-            description = ''
-              Local addresses to listen on for incoming connections.
-              Again, you may want to change this if you are forwarding connections
-              through Apache/Nginx/etc.";
-            '';
-            default = [ "0.0.0.0" "::"];
-          };
-          reprovision_threshold = lib.mkOption {
-            type = lib.types.ints.positive;
-            description = "How many days remaining on a certificate before it is renewed";
-            default = 30;
-          };
-          domain = lib.mkOption {
-            type = lib.types.str;
-            description = ''
-              The domain that the certificate should be for. Normally this
-              should be the same as your Matrix domain (i.e., 'server_name'), but,
-              by putting a file at 'https://<server_name>/.well-known/matrix/server',
-              you can delegate incoming traffic to another server. If you do that,
-              you should give the target of the delegation here.
-              
-              For example: if your 'server_name' is 'example.com', but
-              'https://example.com/.well-known/matrix/server' delegates to
-              'matrix.example.com', you should put 'matrix.example.com' here.
-            '';
-            default = cfg.settings.server_name;
-          };
-          account_key_file = lib.mkOption {
-            type = lib.types.path;
-            description = "file to use for the account key, will be generated if it doesn't exist";
-            default = cfg.dataDir + "/acme_account.key";
-          };
-        };
         options.federation_ip_range_blacklist = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           description = ''
@@ -315,7 +269,7 @@ in
         options.media_store_path = lib.mkOption {
           type = lib.types.path;
           description = "Directory where uploaded images and attachments are stored";
-          default = cfg.dataDir + "/media_store";
+          default = "${cfg.dataDir}/media_store";
         };
         options.max_upload_size = lib.mkOption {
           type = lib.types.str;
@@ -349,7 +303,7 @@ in
         options.signing_key_path = lib.mkOption {
           type = lib.types.path;
           description = "Path to the signing key to sign messages with";
-          default = cfg.dataDir + "/" +cfg.settings.server_name + ".signing.key";
+          default = "${cfg.dataDir}/homeserver.signing.key";
         };
 
         options.trusted_key_servers = lib.mkOption {
