@@ -433,7 +433,7 @@ in
         partOf = [ "matrix-synapse.target" ];
         wantedBy = [ "matrix-synapse.target" ];
         preStart = ''
-        ${cfg.package}/bin/homeserver \
+        ${cfg.package}/bin/synapse_homeserver \
           ${ lib.concatMapStringsSep "\n  " (x: "--config-path ${x} \\") ([ matrix-synapse-common-config ] ++ cfg.extraConfigFiles) }
           --keys-directory ${cfg.dataDir} \
           --generate-keys
@@ -445,7 +445,7 @@ in
           Group = "matrix-synapse";
           WorkingDirectory = cfg.dataDir;
           ExecStart = ''
-            ${cfg.package}/bin/homeserver \
+            ${cfg.package}/bin/synapse_homeserver \
               ${ lib.concatMapStringsSep "\n  " (x: "--config-path ${x} \\") ([ matrix-synapse-common-config ] ++ cfg.extraConfigFiles) }
               --keys-directory ${cfg.dataDir}
           '';
@@ -471,7 +471,6 @@ in
             after = [ "matrix-synapse.service" ];
             environment.PYTHONPATH = lib.makeSearchPathOutput "lib" cfg.package.python.sitePackages [
               pluginsEnv
-#              (cfg.package.python.pkgs.toPythonModule cfg.package)
             ];
             serviceConfig = {
               Type = "notify";
@@ -479,7 +478,7 @@ in
               Group = "matrix-synapse";
               WorkingDirectory = cfg.dataDir;
               ExecStart = ''
-                ${cfg.package.python.withPackages (ps: [(cfg.package.python.pkgs.toPythonModule cfg.package)])}/bin/python -m synapse.app.generic_worker \
+                ${cfg.package}/bin/synapse_worker \
                   ${ lib.concatMapStringsSep "\n  " (x: "--config-path ${x} \\") ([ matrix-synapse-common-config (workerConfig worker) ] ++ cfg.extraConfigFiles) }
                   --keys-directory ${cfg.dataDir}
               '';
