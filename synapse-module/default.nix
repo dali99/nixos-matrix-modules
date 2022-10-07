@@ -55,95 +55,128 @@ in
       default = lib.readFile ./matrix-synapse-log_config.yaml;
     };
 
-    workers = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
-        options.settings = lib.mkOption {
-          type = lib.types.submodule {
-            freeformType = format.type;
-            
-            options.worker_app = lib.mkOption {
-              type = lib.types.enum [
-                "synapse.app.generic_worker"
-                "synapse.app.pusher"
-                "synapse.app.appservice"
-                "synapse.app.federation_sender"
-                "synapse.app.media_repository"
-                "synapse.app.user_dir"
-                "synapse.app.frontend_proxy"
-              ];
-              description = "The type of worker application";
-            };
-            options.worker_replication_host = lib.mkOption {
-              type = lib.types.str;
-              description = "The replication listeners ip on the main synapse process";
-              default = "127.0.0.1";
-            };
-            options.worker_replication_http_port = lib.mkOption {
-              type = lib.types.port;
-              description = "The replication listeners port on the main synapse process";
-            };
-            options.worker_listeners = lib.mkOption {
-              type = lib.types.listOf (lib.types.submodule {
-                options.type = lib.mkOption {
-                  type = lib.types.enum [ "http" "metrics" ];
-                  description = "The type of the listener";
-                  default = "http";
-                };
-                options.port = lib.mkOption {
-                  type = lib.types.port;
-                  description = "the TCP port to bind to";
-                };
-                options.bind_addresses = lib.mkOption {
-                  type = lib.types.listOf lib.types.str;
-                  description = "A list of local addresses to listen on";
-                };
-                options.tls = lib.mkOption {
-                  type = lib.types.bool;
-                  description = "set to true to enable TLS for this listener. Will use the TLS key/cert specified in tls_private_key_path / tls_certificate_path.";
-                  default = true;
-                };
-                options.x_forwarded = lib.mkOption {
-                  type = lib.types.bool;
-                  description = ''
-                    Only valid for an 'http' listener. Set to true to use the X-Forwarded-For header as the client IP.
-                    Useful when Synapse is behind a reverse-proxy.
-                  '';
-                  default = false;
-                };
-                options.resources = lib.mkOption {
-                  type = lib.types.listOf (lib.types.submodule {
-                    options.names = lib.mkOption {
-                      type = lib.types.listOf (lib.types.enum [ "client" "consent" "federation" "keys" "media" "metrics" "openid" "replication" "static" "webclient" ]);
-                      description = "A list of resources to host on this port";
-                    };
-                    options.compress = lib.mkOption {
-                      type = lib.types.bool;
-                      description = "enable HTTP compression for this resource";
-                      default = false;
-                    };
-                  });
-                };
-              });
-              description = "Listener configuration for the worker, similar to the main synapse listener";
-              default = [];
-            };
-          };
-        };
-      }));
-      default = {};
-      description = "Worker configuration";
-      example = {
-        "federation_sender1" = {
-          settings = {
-            worker_name = "federation_sender1";
-            worker_app = "synapse.app.federation_sender";
+    workers = let
+      inherit (lib.lists) any;
+      isReplication = l: any (r: any (n: n == "replication") r.names) l.resources;
 
-            worker_replication_host = "127.0.0.1";
-            worker_replication_http_port = 9093;
-            worker_listeners = [ ];
+      dMRL = lib.lists.findFirst isReplication
+        (throw "No replication listener configured!")
+        cfg.settings.listeners;
+
+      dMRH = lib.findFirst (x: true) (throw "Replication listener had no addresses")
+        dMRL.bind_addresses;
+      dMRP = dMRL.port;
+    in {
+      enable = lib.mkEnableOption "synapse worker support";
+
+      mainReplicationHost = lib.mkOption {
+        type = lib.types.str;
+        default = dMRH;
+        description = "Host of the main synapse instance's replication listener";
+      };
+
+      mainReplicationPort = lib.mkOption {
+        type = lib.types.port;
+        default = dMRP;
+        description = "Port for the main synapse instance's replication listener";
+      };
+
+      federationSenders = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "How many automatically configured federation senders to set up";
+        default = 0;
+      };
+
+      instances = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
+          options.settings = lib.mkOption {
+            type = lib.types.submodule {
+              freeformType = format.type;
+            
+              options.worker_app = lib.mkOption {
+                type = lib.types.enum [
+                  "synapse.app.generic_worker"
+                  "synapse.app.pusher"
+                  "synapse.app.appservice"
+                  "synapse.app.federation_sender"
+                  "synapse.app.media_repository"
+                  "synapse.app.user_dir"
+                ];
+                description = "The type of worker application";
+              };
+              options.worker_replication_host = lib.mkOption {
+                type = lib.types.str;
+                default = cfg.workers.mainReplicationHost;
+                description = "The replication listeners ip on the main synapse process";
+              };
+              options.worker_replication_http_port = lib.mkOption {
+                type = lib.types.port;
+                default = cfg.workers.mainReplicationPort;
+                description = "The replication listeners port on the main synapse process";
+              };
+              options.worker_listeners = lib.mkOption {
+                type = lib.types.listOf (lib.types.submodule {
+                  options.type = lib.mkOption {
+                    type = lib.types.enum [ "http" "metrics" ];
+                    description = "The type of the listener";
+                    default = "http";
+                  };
+                  options.port = lib.mkOption {
+                    type = lib.types.port;
+                    description = "the TCP port to bind to";
+                  };
+                  options.bind_addresses = lib.mkOption {
+                    type = lib.types.listOf lib.types.str;
+                    description = "A list of local addresses to listen on";
+                  };
+                  options.tls = lib.mkOption {
+                    type = lib.types.bool;
+                    description = "set to true to enable TLS for this listener. Will use the TLS key/cert specified in tls_private_key_path / tls_certificate_path.";
+                    default = true;
+                  };
+                  options.x_forwarded = lib.mkOption {
+                    type = lib.types.bool;
+                    description = ''
+                      Only valid for an 'http' listener. Set to true to use the X-Forwarded-For header as the client IP.
+                      Useful when Synapse is behind a reverse-proxy.
+                    '';
+                    default = false;
+                  };
+                  options.resources = lib.mkOption {
+                    type = lib.types.listOf (lib.types.submodule {
+                      options.names = lib.mkOption {
+                        type = lib.types.listOf (lib.types.enum [ "client" "consent" "federation" "keys" "media" "metrics" "openid" "replication" "static" "webclient" ]);
+                        description = "A list of resources to host on this port";
+                      };
+                      options.compress = lib.mkOption {
+                        type = lib.types.bool;
+                        description = "enable HTTP compression for this resource";
+                        default = false;
+                      };
+                    });
+                  };
+                });
+                description = "Listener configuration for the worker, similar to the main synapse listener";
+                default = [ ];
+              };
+            };
           };
+        }));
+        default = { };
+        description = "Worker configuration";
+        example = {
+          "federation_sender1" = {
+            settings = {
+              worker_name = "federation_sender1";
+              worker_app = "synapse.app.federation_sender";
+
+              worker_replication_host = "127.0.0.1";
+              worker_replication_http_port = 9093;
+              worker_listeners = [ ];
+            };
         };
       };
+    };
     };
 
     settings = lib.mkOption {
@@ -179,7 +212,7 @@ in
 
         options.use_presence = lib.mkOption {
           type = lib.types.bool;
-          description = "disable presence tracking on this homeserver, if you're having perfomance issues this can have a big impact";
+          description = "disable presence tracking, if you're having perfomance issues this can have a big impact";
           default = true;
         };
 
@@ -343,7 +376,7 @@ in
             started, to ensure that all instances are running with the same config (otherwise
             events may be dropped)
           '';
-          default = [];
+          default = [ ];
         };
       };
     };
@@ -407,11 +440,16 @@ in
           Restart = "on-failure";
         };
       };
+
+      services.matrix-synapse-next.settings.federation_sender_instances = lib.genList (x: "auto-fed-sender${toString x}") cfg.workers.federationSenders;
+      services.matrix-synapse-next.workers.instances = lib.attrsets.genAttrs (lib.genList
+        (x: "auto-fed-sender${toString x}") cfg.workers.federationSenders)
+        (_: { settings.worker_app = "synapse.app.federation_sender";});
     })
 
     ({
       systemd.services = let
-        workerList = lib.mapAttrsToList (name: value: lib.nameValuePair name value ) cfg.workers;
+        workerList = lib.mapAttrsToList (name: value: lib.nameValuePair name value ) cfg.workers.instances;
         workerName = worker: worker.name;
         workerSettings = worker: (worker.value.settings // {worker_name = (workerName worker);});
         workerConfig = worker: format.generate "matrix-synapse-worker-${workerName worker}-config.yaml" (workerSettings worker);
