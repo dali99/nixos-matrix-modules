@@ -56,8 +56,7 @@ in
     };
 
     workers = let
-      inherit (lib.lists) any;
-      isReplication = l: any (r: any (n: n == "replication") r.names) l.resources;
+      isReplication = l: lib.lists.any (r: lib.lists.any (n: n == "replication") r.names) l.resources;
 
       dMRL = lib.lists.findFirst isReplication
         (throw "No replication listener configured!")
@@ -71,7 +70,7 @@ in
 
       mainReplicationHost = lib.mkOption {
         type = lib.types.str;
-        default = dMRH;
+        default = if (lib.lists.all (x: dMRH != x) ["0.0.0.0" "::"]) then dMRH else "127.0.0.1";
         description = "Host of the main synapse instance's replication listener";
       };
 
@@ -356,11 +355,6 @@ in
             }
           ];
         };
-        options.suppress_key_server_warning = lib.mkOption {
-          type = lib.types.bool;
-          description = "using matrix.org as a trusted key server will generate a warning if this is false";
-          default = false;
-        };
         
         options.send_federation = lib.mkOption {
           type = lib.types.bool;
@@ -377,6 +371,21 @@ in
             events may be dropped)
           '';
           default = [ ];
+        };
+
+        options.redis = lib.mkOption {
+          type = lib.types.submodule {
+            freeformType = format.type;
+
+            options.enabled = lib.mkOption {
+              type = lib.types.bool;
+              description = "Enables using redis, required for worker support";
+              default = (lib.lists.count (x: true)
+                (lib.attrsets.attrValues cfg.workers.instances)) > 0;
+            };
+          };
+          default = { };
+          description = "configuration of redis for synapse and workers"; 
         };
       };
     };
