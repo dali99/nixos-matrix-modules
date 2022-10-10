@@ -7,11 +7,6 @@ let
   pluginsEnv = cfg.package.python.buildEnv.override {
     extraLibs = cfg.plugins;
   };
-
-  typeToResources = t: {
-    "fed-receiver" = [ "federation" ];
-    "fed-sender" = [ ];
-  }.t;
 in
 {
   options.services.matrix-synapse-next = {
@@ -130,6 +125,11 @@ in
             defaultApp = if (instanceCfg.autoType == null)
               then "synapse.app.generic_worker"
               else mapTypeApp instanceCfg.autoType;
+
+            typeToResources = t: {
+              "fed-receiver" = [ "federation" ];
+              "fed-sender"   = [ ];
+            }.${t};
           in lib.mkOption {
             type = lib.types.submodule ({config, ...}: {
               freeformType = format.type;
@@ -190,6 +190,7 @@ in
                       options.names = lib.mkOption {
                         type = lib.types.listOf (lib.types.enum [ "client" "consent" "federation" "keys" "media" "metrics" "openid" "replication" "static" "webclient" ]);
                         description = "A list of resources to host on this port";
+                        default = lib.optionals isAuto (typeToResources instanceCfg.autoType);
                       };
                       options.compress = lib.mkOption {
                         type = lib.types.bool;
@@ -197,6 +198,7 @@ in
                         default = false;
                       };
                     });
+                    default = [{ }];
                   };
                 });
                 description = "Listener configuration for the worker, similar to the main synapse listener";
@@ -517,17 +519,14 @@ in
       })
 
       ({
-        services.matrix-synapse-next.workers.instances = lib.mapAttrs'
-          (name: value: lib.attrsets.nameValuePair "auto-fed-receiver${name}" value)
-          (lib.genAttrs (lib.genList (x: builtins.toString x) cfg.workers.federationReceivers) 
-            (x: {
-              autoType = "fed-receiver";
-              settings.worker_listeners = [
-                { port = cfg.workers.workerStartingPort + (lib.strings.toInt x);
-                  resources = [ {names = ["federation"];} ];
-                }
-              ];
-            }));
+        services.matrix-synapse-next.workers.instances = let 
+          genAttrs' = items: f: g: builtins.listToAttrs (builtins.map (n: lib.attrsets.nameValuePair (f n) (g n)) items);
+        in genAttrs' (lib.genList (x: x) cfg.workers.federationReceivers)
+          (x: "auto-fed-receiver${builtins.toString x}")
+          (x: {
+            autoType = "fed-receiver";
+            settings.worker_listeners = [{ port = cfg.workers.workerStartingPort + x; }];
+          });
       })
     ])
 
