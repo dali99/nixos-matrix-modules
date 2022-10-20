@@ -40,15 +40,6 @@ in
       '';
     };
 
-    enableMainSynapse = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = ''
-        Enable the main synapse process.
-        Useful if running workers on separate computers.
-      '';
-    };
-
     mainLogConfig = lib.mkOption {
       type = lib.types.lines;
       description = "A yaml python logging config file";
@@ -249,12 +240,6 @@ in
           example = "matrix.org";
         };
 
-        options.pid_file = lib.mkOption {
-          type = lib.types.path;
-          description = "When running as a daemon, the file to store the pid in";
-          default = "/run/matrix-synapse.pid";
-        };
-
         options.use_presence = lib.mkOption {
           type = lib.types.bool;
           description = "disable presence tracking, if you're having perfomance issues this can have a big impact";
@@ -305,10 +290,9 @@ in
             };
           });
           description = "List of ports that Synapse should listen on, their purpose and their configuration";
-          default = let
-            enableReplication = lib.lists.any 
-              (w: !(builtins.elem w.settings.worker_app [ "federationSender" ]))
-              cfg.workers.instances;
+          default = let enableReplication = lib.lists.any
+            (w: !(builtins.elem w.settings.worker_app [ "federationSender" ]))
+            cfg.workers.instances;
           in [
             {
               port = 8008;
@@ -370,7 +354,7 @@ in
         options.enable_registration = lib.mkOption {
           type = lib.types.bool;
           description = "Enable registration for new users";
-          default = true;
+          default = false;
         };
 
         options.enable_metrics = lib.mkOption {
@@ -417,7 +401,7 @@ in
         options.send_federation = lib.mkOption {
           type = lib.types.bool;
           description = "Disables sending of outbound federation transactions on the main process. Set to false if using federation senders";
-          default = (lib.lists.count (x: true) cfg.settings.federation_sender_instances) == 0;
+          default = cfg.settings.federation_sender_instances == [];
         };
 
         options.federation_sender_instances = lib.mkOption {
