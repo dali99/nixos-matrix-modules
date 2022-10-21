@@ -277,7 +277,6 @@ in
           description = "disable presence tracking, if you're having perfomance issues this can have a big impact";
           default = true;
         };
-/
         options.listeners = lib.mkOption {
           type = lib.types.listOf (lib.types.submodule {
             options.port = lib.mkOption {
