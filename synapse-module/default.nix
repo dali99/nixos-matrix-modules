@@ -277,7 +277,7 @@ in
           description = "disable presence tracking, if you're having perfomance issues this can have a big impact";
           default = true;
         };
-
+/
         options.listeners = lib.mkOption {
           type = lib.types.listOf (lib.types.submodule {
             options.port = lib.mkOption {
@@ -340,6 +340,13 @@ in
               bind_addresses = [ "127.0.0.1" ];
               resources = [
                 {  names = [ "replication" ]; }
+              ];
+            })
+            (lib.mkIf cfg.settings.enable_metrics {
+              port = 9000;
+              bind_addresses = [ "127.0.0.1" ];
+              resources = [
+                {  names = [ "metrics" ]; }
               ];
             })
           ];
