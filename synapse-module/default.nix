@@ -15,6 +15,8 @@ let
   isListenerType = type: listener: lib.lists.any (r: lib.lists.any (n: n == type) r.names) listener.resources;  
 in
 {
+  imports = [ ./nginx.nix ];
+
   options.services.matrix-synapse-next = {
     enable = lib.mkEnableOption "matrix-synapse";
 
@@ -117,6 +119,18 @@ in
         default = 0;
       };
 
+      initialSyncers = lib.mkOption {
+        type = lib.types.ints.unsigned;
+        description = "How many automatically configured intial syncers to set up";
+        default = 0;
+      };
+
+      normalSyncers = lib.mkOption {
+        type = lib.types.ints.unsigned;
+        description = "How many automatically configured sync workers to set up";
+        default = 0;
+      };
+
       instances = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
 
@@ -147,6 +161,8 @@ in
                 mapTypeApp = t: {
                   "fed-sender"   = "synapse.app.generic_worker";
                   "fed-receiver" = "synapse.app.generic_worker";
+                  "initial-sync" = "synapse.app.generic_worker";
+                  "normal-sync"  = "synapse.app.generic_worker";
                 }.${t};
                 defaultApp = if (!isAuto)
                   then "synapse.app.generic_worker"
@@ -204,6 +220,8 @@ in
                     typeToResources = t: {
                       "fed-receiver" = [ "federation" ];
                       "fed-sender"   = [ ];
+                      "initial-sync"  = [ "client" ];
+                      "normal-sync"  = [ "client" ];
                     }.${t};
                   in lib.mkOption {
                     type = lib.types.listOf (lib.types.submodule {
@@ -546,6 +564,31 @@ in
              };
           });
       })
+
+      
+      ({
+        services.matrix-synapse-next.workers.instances = genAttrs' (lib.lists.range 1 cfg.workers.initialSyncers)
+          (i: "auto-initial-sync${toString i}")
+          (i: {
+            isAuto = true; type = "initial-sync"; index = i;
+            settings.worker_listeners = [{ port = cfg.workers.workerStartingPort + cfg.workers.federationReceivers + i - 1; }]
+             ++ lib.optional wcfg.enableMetrics { port = cfg.workers.metricsStartingPort + cfg.workers.federationSenders + cfg.workers.federationReceivers + i;
+               resources = [ { names = [ "metrics" ]; } ];
+             };
+          });
+      })
+
+      ({
+        services.matrix-synapse-next.workers.instances = genAttrs' (lib.lists.range 1 cfg.workers.normalSyncers)
+          (i: "auto-normal-sync${toString i}")
+          (i: {
+            isAuto = true; type = "normal-sync"; index = i;
+            settings.worker_listeners = [{ port = cfg.workers.workerStartingPort + cfg.workers.federationReceivers + cfg.workers.initialSyncers + i - 1; }]
+             ++ lib.optional wcfg.enableMetrics { port = cfg.workers.metricsStartingPort + cfg.workers.federationSenders + cfg.workers.federationReceivers + cfg.workers.initialSyncers + i;
+               resources = [ { names = [ "metrics" ]; } ];
+             };
+          });
+      })
     ])
 
     ({
@@ -586,119 +629,6 @@ in
           };
         }
       ) workerList);
-    })
-
-    (lib.mkIf cfg.enableNginx {
-      services.nginx.commonHttpConfig = ''
-        map $request_uri $synapse_backend {
-          default synapse_master;
-
-          # Sync requests
-          ~*^/_matrix/client/(v2_alpha|r0)/sync$ synapse_client;
-          ~*^/_matrix/client/(api/v1|v2_alpha|r0)/events$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0)/initialSync$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0)/rooms/[^/]+/initialSync$ synapse_client;
-
-          # Federation requests
-          ~*^/_matrix/federation/v1/event/ synapse_federation;
-          ~*^/_matrix/federation/v1/state/ synapse_federation;
-          ~*^/_matrix/federation/v1/state_ids/ synapse_federation;
-          ~*^/_matrix/federation/v1/backfill/ synapse_federation;
-          ~*^/_matrix/federation/v1/get_missing_events/ synapse_federation;
-          ~*^/_matrix/federation/v1/publicRooms synapse_federation;
-          ~*^/_matrix/federation/v1/query/ synapse_federation;
-          ~*^/_matrix/federation/v1/make_join/ synapse_federation;
-          ~*^/_matrix/federation/v1/make_leave/ synapse_federation;
-          ~*^/_matrix/federation/v1/send_join/ synapse_federation;
-          ~*^/_matrix/federation/v2/send_join/ synapse_federation;
-          ~*^/_matrix/federation/v1/send_leave/ synapse_federation;
-          ~*^/_matrix/federation/v2/send_leave/ synapse_federation;
-          ~*^/_matrix/federation/v1/invite/ synapse_federation;
-          ~*^/_matrix/federation/v2/invite/ synapse_federation;
-          ~*^/_matrix/federation/v1/query_auth/ synapse_federation;
-          ~*^/_matrix/federation/v1/event_auth/ synapse_federation;
-          ~*^/_matrix/federation/v1/exchange_third_party_invite/ synapse_federation;
-          ~*^/_matrix/federation/v1/user/devices/ synapse_federation;
-          ~*^/_matrix/federation/v1/get_groups_publicised$ synapse_federation;
-          ~*^/_matrix/key/v2/query synapse_federation;
-
-          # Inbound federation transaction request
-          ~*^/_matrix/federation/v1/send/ synapse_federation;
-
-          # Client API requests
-          ~*^/_matrix/client/(api/v1|r0|unstable)/publicRooms$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/rooms/.*/joined_members$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/rooms/.*/context/.*$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/rooms/.*/members$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/rooms/.*/state$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/account/3pid$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/devices$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/keys/query$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/keys/changes$ synapse_client;
-          ~*^/_matrix/client/versions$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/voip/turnServer$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/joined_groups$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/publicised_groups$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/publicised_groups/ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/rooms/.*/event/ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/joined_rooms$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/search$ synapse_client;
-
-          # Registration/login requests
-          ~*^/_matrix/client/(api/v1|r0|unstable)/login$ synapse_client;
-          ~*^/_matrix/client/(r0|unstable)/register$ synapse_client;
-
-          # Event sending requests
-          ~*^/_matrix/client/(api/v1|r0|unstable)/rooms/.*/redact synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/rooms/.*/send synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/rooms/.*/state/ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/rooms/.*/(join|invite|leave|ban|unban|kick)$ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/join/ synapse_client;
-          ~*^/_matrix/client/(api/v1|r0|unstable)/profile/ synapse_client;
-        }
-      '';
-
-      services.nginx.upstreams.synapse_master.servers = let
-        isMainListener = l: isListenerType "client" l && isListenerType "federation" l;
-        firstMainListener = lib.findFirst isMainListener
-          (throw "No cartch-all listener configured") cfg.settings.listeners;
-        address = lib.findFirst (_: true) (throw "No address in main listener") firstMainListener.bind_addresses;
-        port = firstMainListener.port;
-        socketAddress = "${address}:${builtins.toString port}";
-      in {
-        "${socketAddress}" = { };
-      };
-
-      services.nginx.upstreams.synapse_federation.servers = let
-        fedReceivers = lib.filterAttrs (_: w: w.type == "fed-receiver") cfg.workers.instances;
-        isListenerType = type: listener: lib.lists.any (r: lib.lists.any (n: n == type) r.names) listener.resources;
-        isFedListener = l: isListenerType "federation" l;
-
-        firstFedListener = w: lib.lists.findFirst isFedListener (throw "No federation endpoint on receiver") w.settings.worker_listeners;
-
-        wAddress = w: lib.lists.findFirst (_: true) (throw "No address in receiver") (firstFedListener w).bind_addresses;
-        wPort = w: (firstFedListener w).port;
-
-        socketAddress = w: "${wAddress w}:${builtins.toString (wPort w)}";
-        socketAddresses = lib.mapAttrsToList (_: value: "${socketAddress value}") fedReceivers;
-      in if fedReceivers != [ ] then lib.genAttrs socketAddresses (_: { }) else config.services.nginx.upstreams.synapse_master.servers;
-
-      services.nginx.upstreams.synapse_client.servers = config.services.nginx.upstreams.synapse_master.servers;
-
-
-      services.nginx.virtualHosts."${cfg.public_baseurl}" = {
-        enableACME = true;
-        forceSSL = true;
-        locations."/_matrix" = {
-          proxyPass = "http://$synapse_backend";
-          extraConfig = ''
-            client_max_body_size ${cfg.settings.max_upload_size};
-          '';
-        };
-        locations."/_synapse/client" = {
-          proxyPass = "http://$synapse_backend";
-        };
-      };
-    })
+    })    
   ]);
 }
