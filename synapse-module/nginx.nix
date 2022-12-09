@@ -154,9 +154,6 @@ in
       in if fedReceivers != [ ] then 
         lib.genAttrs socketAddresses (_: { })
     else config.services.nginx.upstreams.synapse_master.servers;
-    extraConfig = ''
-      hash $mxid_localpart consistent;
-    '';
   };
 
 
@@ -173,12 +170,17 @@ in
   };
 
 
-  services.nginx.upstreams.synapse_worker_normal_sync.servers = let
-    normalSyncers = getWorkersOfType "normal-sync";
-    socketAddresses = generateSocketAddresses "client" normalSyncers;
-  in if normalSyncers != [ ] then
-    lib.genAttrs socketAddresses (_: { })
-  else config.services.nginx.upstreams.synapse_master.server;
+  services.nginx.upstreams.synapse_worker_normal_sync = {
+    servers = let
+      normalSyncers = getWorkersOfType "normal-sync";
+      socketAddresses = generateSocketAddresses "client" normalSyncers;
+    in if normalSyncers != [ ] then
+      lib.genAttrs socketAddresses (_: { })
+    else config.services.nginx.upstreams.synapse_master.server;
+    extraConfig = ''
+      hash $mxid_localpart consistent;
+    '';
+  };
 
 
 
