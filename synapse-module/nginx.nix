@@ -159,7 +159,7 @@ in
 
   services.nginx.upstreams.synapse_worker_initial_sync = {
     servers = let
-      initialSyncers = getWorkersOfType "inital-sync";
+      initialSyncers = getWorkersOfType "initial-sync";
       socketAddresses = generateSocketAddresses "client" initialSyncers;
     in if initialSyncers != [ ] then
       lib.genAttrs socketAddresses (_: { })
