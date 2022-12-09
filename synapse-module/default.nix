@@ -145,7 +145,7 @@ in
             
               options.worker_app = let
                 mapTypeApp = t: {
-                  "fed-sender"   = "synapse.app.federation_sender";
+                  "fed-sender"   = "synapse.app.generic_worker";
                   "fed-receiver" = "synapse.app.generic_worker";
                 }.${t};
                 defaultApp = if (!isAuto)
@@ -154,9 +154,7 @@ in
               in lib.mkOption {
                 type = lib.types.enum [
                   "synapse.app.generic_worker"
-                  "synapse.app.pusher"
                   "synapse.app.appservice"
-                  "synapse.app.federation_sender"
                   "synapse.app.media_repository"
                   "synapse.app.user_dir"
                 ];
@@ -236,7 +234,7 @@ in
           "federation_sender1" = {
             settings = {
               worker_name = "federation_sender1";
-              worker_app = "synapse.app.federation_sender";
+              worker_app = "synapse.app.generic_worker";
 
               worker_replication_host = "127.0.0.1";
               worker_replication_http_port = 9093;
@@ -321,11 +319,7 @@ in
             };
           });
           description = "List of ports that Synapse should listen on, their purpose and their configuration";
-          default = let
-            enableReplication = lib.lists.any 
-              (w: !(builtins.elem w.settings.worker_app [ "synapse.app.federation_sender" ]))
-              (builtins.attrValues cfg.workers.instances);
-          in [
+          default = [
             {
               port = 8008;
               bind_addresses = [ "127.0.0.1" ];
@@ -334,7 +328,7 @@ in
                 { names = [ "federation" ]; compress = false; }
               ];
             }
-            (lib.mkIf enableReplication {
+            (lib.mkIf (wcfg.instances != { }) {
               port = 9093;
               bind_addresses = [ "127.0.0.1" ];
               resources = [
@@ -437,12 +431,6 @@ in
           ];
         };
         
-        options.send_federation = lib.mkOption {
-          type = lib.types.bool;
-          description = "Disables sending of outbound federation transactions on the main process. Set to false if using federation senders";
-          default = cfg.settings.federation_sender_instances == [];
-        };
-
         options.federation_sender_instances = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           description = ''
