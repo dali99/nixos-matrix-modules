@@ -19,7 +19,7 @@ in
       ''' synapse_initial_sync;
     }
 
-    map $request_uri $synapse_uri_group {
+    map $uri $synapse_uri_group {
       # Sync requests
       ^/_matrix/client/(r0|v3)/sync$ $synapse_unknown_sync;
       ^/_matrix/client/(api/v1|r0|v3)/event$ synapse_normal_sync;
