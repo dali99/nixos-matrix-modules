@@ -193,6 +193,8 @@ in
     locations."/_matrix" = {
       proxyPass = "http://$synapse_backend";
       extraConfig = ''
+        add_header X-debug-backend $synapse_backend;
+        add_header X-debug-group $synapse_uri_group;
         client_max_body_size ${cfg.settings.max_upload_size};
       '';
     };
