@@ -110,8 +110,8 @@ in
     map $synapse_uri_group $synapse_backend {
       default synapse_master;
 
-      # synapse_initial_sync synapse_worker_initial_sync;
-      # synapse_normal_sync  synapse_worker_normal_sync;
+      synapse_initial_sync synapse_worker_initial_sync;
+      synapse_normal_sync  synapse_worker_normal_sync;
 
       synapse_federation synapse_worker_federation;
       synapse_federation_transaction synapse_worker_federation;
