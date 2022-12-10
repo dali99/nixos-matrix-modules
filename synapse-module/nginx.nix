@@ -154,6 +154,9 @@ in
       in if fedReceivers != [ ] then 
         lib.genAttrs socketAddresses (_: { })
     else config.services.nginx.upstreams.synapse_master.servers;
+    extraConfig = ''
+      ip_hash;
+    '';
   };
 
 
