@@ -195,6 +195,7 @@ in
       extraConfig = ''
         add_header X-debug-backend $synapse_backend;
         add_header X-debug-group $synapse_uri_group;
+        add_header X-debug-uri $request_uri;
         client_max_body_size ${cfg.settings.max_upload_size};
       '';
     };
