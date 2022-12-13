@@ -196,6 +196,25 @@ in
         add_header X-debug-backend $synapse_backend;
         add_header X-debug-group $synapse_uri_group;
         client_max_body_size ${cfg.settings.max_upload_size};
+        proxy_read_timeout 10m;
+      '';
+    };
+    locations."~ ^/_matrix/client/(r0|v3)/sync$" = {
+      proxyPass = "http://$synapse_unknown_sync";
+      extraConfig = ''
+        proxy_read_timeout 1h;
+      '';
+    };
+    locations."~ ^/_matrix/client/(api/v1|r0|v3)/initialSync$" = {
+      proxyPass = "http://$synapse_initial_sync";
+      extraConfig = ''
+        proxy_read_timeout 1h;
+      '';
+    };
+    locations."~ ^/_matrix/client/(api/v1|r0|v3)/rooms/[^/]+/initialSync$" = {
+      proxyPass = "http://$synapse_initial_sync";
+      extraConfig = ''
+        proxy_read_timeout 1h;
       '';
     };
     locations."/_synapse/client" = {
