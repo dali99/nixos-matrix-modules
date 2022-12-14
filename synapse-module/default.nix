@@ -614,7 +614,7 @@ in
             port = wRP;
           }
         );
-        services.matrix-synapse-next.settings.stream_writers.events = lib.genList (i: "auto-event-persist${toString (i + 1)}") cfg.workers.eventPersisters; 
+        services.matrix-synapse-next.settings.stream_writers.events = lib.optional (cfg.workers.eventPersisters > 0) (lib.genList (i: "auto-event-persist${toString (i + 1)}") cfg.workers.eventPersisters); 
         services.matrix-synapse-next.workers.instances = genAttrs' (lib.lists.range 1 cfg.workers.eventPersisters)
           (i: "auto-event-persist${toString i}")
           (i: {
