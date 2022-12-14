@@ -200,7 +200,7 @@ in
       '';
     };
     locations."~ ^/_matrix/client/(r0|v3)/sync$" = {
-      proxyPass = "http://$synapse_unknown_sync";
+      proxyPass = "http://$synapse_backend";
       extraConfig = ''
         proxy_read_timeout 1h;
       '';
