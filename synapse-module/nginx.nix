@@ -103,7 +103,7 @@ in
       ~^/_matrix/client/(api/v1|r0|v3|unstable)/presence/ synapse_client_presence;
 
       # User directory search requests;
-      ~^/_matrix/client/(r0|v3|unstable)/user_directory/search$ synapse_client_search;
+      ~^/_matrix/client/(r0|v3|unstable)/user_directory/search$ synapse_client_user-dir;
     }
 
     #Plugboard for url -> workers
@@ -115,6 +115,8 @@ in
 
       synapse_federation synapse_worker_federation;
       synapse_federation_transaction synapse_worker_federation;
+
+      synapse_client_user-dir synapse_worker_user-dir;
     }
 
     # from https://github.com/tswfi/synapse/commit/b3704b936663cc692241e978dce4ac623276b1a6
@@ -166,7 +168,7 @@ in
       socketAddresses = generateSocketAddresses "client" initialSyncers;
     in if initialSyncers != [ ] then
       lib.genAttrs socketAddresses (_: { })
-    else config.services.nginx.upstreams.synapse_master.server;
+    else config.services.nginx.upstreams.synapse_master.servers;
     extraConfig = ''
       hash $mxid_localpart consistent;
     '';
@@ -179,13 +181,21 @@ in
       socketAddresses = generateSocketAddresses "client" normalSyncers;
     in if normalSyncers != [ ] then
       lib.genAttrs socketAddresses (_: { })
-    else config.services.nginx.upstreams.synapse_master.server;
+    else config.services.nginx.upstreams.synapse_master.servers;
     extraConfig = ''
       hash $mxid_localpart consistent;
     '';
   };
 
 
+  services.nginx.upstreams.synapse_worker_user-dir = {
+    servers = let
+      workers = getWorkersOfType "user-dir";
+      socketAddresses = generateSocketAddresses "client" workers;
+    in if workers != [ ] then
+      lib.genAttrs socketAddresses (_: { })
+    else config.services.nginx.upstreams.synapse_master.servers;
+  };
 
   services.nginx.virtualHosts."${cfg.public_baseurl}" = {
     enableACME = true;

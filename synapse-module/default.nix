@@ -137,6 +137,8 @@ in
         default = 0;
       };
 
+      useUserDirectoryWorker = lib.mkEnableOption "user directory worker";
+
       instances = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
 
@@ -170,6 +172,7 @@ in
                   "initial-sync"  = "synapse.app.generic_worker";
                   "normal-sync"   = "synapse.app.generic_worker";
                   "event-persist" = "synapse.app.generic_worker";
+                  "user-dir"      = "synapse.app.generic_worker";
                 }.${t};
                 defaultApp = if (!isAuto)
                   then "synapse.app.generic_worker"
@@ -230,6 +233,7 @@ in
                       "initial-sync"  = [ "client" ];
                       "normal-sync"   = [ "client" ];
                       "event-persist" = [ "replication" ];
+                      "user-dir"      = [ "client" ];
                     }.${t};
                   in lib.mkOption {
                     type = lib.types.listOf (lib.types.submodule {
@@ -620,10 +624,21 @@ in
           (i: {
             isAuto = true; type = "event-persist"; index = i;
             settings.worker_listeners = [{ port = cfg.workers.workerStartingPort + cfg.workers.federationReceivers + cfg.workers.initialSyncers + cfg.workers.normalSyncers + i - 1;}]
-             ++ lib.optional wcfg.enableMetrics { port = cfg.workers.metricsStartingPort + cfg.workers.federationSenders + cfg.workers.federationReceivers + cfg.workers.initialSyncers + cfg.workers.normalSyncers + i;
-               resources = [ { names = [ "metrics" ]; } ];
+              ++ lib.optional wcfg.enableMetrics { port = cfg.workers.metricsStartingPort + cfg.workers.federationSenders + cfg.workers.federationReceivers + cfg.workers.initialSyncers + cfg.workers.normalSyncers + i;
+                resources = [ { names = [ "metrics" ]; } ];
           };
         });
+      })
+
+      (lib.mkIf cfg.workers.useUserDirectoryWorker {
+        services.matrix-synapse-next.workers.instances."auto-user-dir" = {
+          isAuto = true; type = "user-dir"; index = 1;
+          settings.worker_listeners = [{ port = cfg.workers.workerStartingPort + cfg.workers.federationReceivers + cfg.workers.initialSyncers + cfg.workers.normalSyncers + cfg.workers.eventPersisters + 1 - 1;}]
+            ++ lib.optional wcfg.enableMetrics { port = cfg.workers.metricsStartingPort + cfg.workers.federationSenders + cfg.workers.federationReceivers + cfg.workers.initialSyncers + cfg.workers.normalSyncers + cfg.workers.eventPersisters + 1;
+              resources = [ { names = [ "metrics"]; } ];
+            };
+        };
+        services.matrix-synapse-next.settings.update_user_directory_from_worker = "auto-user-dir";
       })
     ])
 
