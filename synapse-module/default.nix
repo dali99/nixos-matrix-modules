@@ -131,6 +131,12 @@ in
         default = 0;
       };
 
+      eventPersisters = lib.mkOption {
+        type = lib.types.ints.unsigned;
+        description = "How many automatically configured event-persisters to set up";
+        default = 0;
+      };
+
       instances = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
 
@@ -159,14 +165,15 @@ in
             
               options.worker_app = let
                 mapTypeApp = t: {
-                  "fed-sender"   = "synapse.app.generic_worker";
-                  "fed-receiver" = "synapse.app.generic_worker";
-                  "initial-sync" = "synapse.app.generic_worker";
-                  "normal-sync"  = "synapse.app.generic_worker";
+                  "fed-sender"    = "synapse.app.generic_worker";
+                  "fed-receiver"  = "synapse.app.generic_worker";
+                  "initial-sync"  = "synapse.app.generic_worker";
+                  "normal-sync"   = "synapse.app.generic_worker";
+                  "event-persist" = "synapse.app.generic_worker";
                 }.${t};
                 defaultApp = if (!isAuto)
                   then "synapse.app.generic_worker"
-              else mapTypeApp type;
+                  else mapTypeApp type;
               in lib.mkOption {
                 type = lib.types.enum [
                   "synapse.app.generic_worker"
@@ -218,10 +225,11 @@ in
                   };
                   options.resources = let
                     typeToResources = t: {
-                      "fed-receiver" = [ "federation" ];
-                      "fed-sender"   = [ ];
+                      "fed-receiver"  = [ "federation" ];
+                      "fed-sender"    = [ ];
                       "initial-sync"  = [ "client" ];
-                      "normal-sync"  = [ "client" ];
+                      "normal-sync"   = [ "client" ];
+                      "event-persist" = [ "replication" ];
                     }.${t};
                   in lib.mkOption {
                     type = lib.types.listOf (lib.types.submodule {
@@ -588,6 +596,33 @@ in
                resources = [ { names = [ "metrics" ]; } ];
              };
           });
+      })
+
+      ({
+        services.matrix-synapse-next.settings.instance_map = genAttrs' (lib.lists.range 1 cfg.workers.eventPersisters)
+          (i: "auto-event-persist${toString i}")
+          (i: let
+            isReplication = l: lib.lists.any (r: lib.lists.any (n: n == "replication") r.names) l.resources;
+            wRL = lib.lists.findFirst isReplication
+              (throw "No replication listener configured!")
+              cfg.workers.instances."auto-event-persist${toString i}".settings.listeners;
+            wRH = lib.findFirst (x: true) (throw "Replication listener had no addresses")
+              wRL.bind_addresses;
+            wRP = wRL.port;
+          in {
+            host = wRH;
+            port = wRP;
+          }
+        );
+        services.matrix-synapse-next.settings.stream_writers.events = lib.genList (i: "auto-event-persist${toString (i + 1)}") cfg.workers.eventPersisters; 
+        services.matrix-synapse-next.workers.instances = genAttrs' (lib.lists.range 1 cfg.workers.eventPersisters)
+          (i: "auto-event-persist${toString i}")
+          (i: {
+            isAuto = true; type = "event-persist"; index = i;
+            settings.worker_listeners = [{ port = cfg.workers.workerStartingPort + cfg.workers.federationReceivers + cfg.workers.initialSyncers + cfg.workers.normalSyncers + i - 1;}]
+             ++ lib.optional wcfg.enableMetrics { port = cfg.workers.metricsStartingPort + cfg.workers.federationSenders + cfg.workers.federationReceivers + cfg.workers.initialSyncers + cfg.workers.normalSyncers + i;
+          };
+        });
       })
     ])
 
