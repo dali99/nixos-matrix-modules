@@ -621,6 +621,7 @@ in
             isAuto = true; type = "event-persist"; index = i;
             settings.worker_listeners = [{ port = cfg.workers.workerStartingPort + cfg.workers.federationReceivers + cfg.workers.initialSyncers + cfg.workers.normalSyncers + i - 1;}]
              ++ lib.optional wcfg.enableMetrics { port = cfg.workers.metricsStartingPort + cfg.workers.federationSenders + cfg.workers.federationReceivers + cfg.workers.initialSyncers + cfg.workers.normalSyncers + i;
+               resources = [ { names = [ "metrics" ]; } ];
           };
         });
       })
