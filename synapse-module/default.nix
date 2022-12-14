@@ -605,7 +605,7 @@ in
             isReplication = l: lib.lists.any (r: lib.lists.any (n: n == "replication") r.names) l.resources;
             wRL = lib.lists.findFirst isReplication
               (throw "No replication listener configured!")
-              cfg.workers.instances."auto-event-persist${toString i}".settings.listeners;
+              cfg.workers.instances."auto-event-persist${toString i}".settings.worker_listeners;
             wRH = lib.findFirst (x: true) (throw "Replication listener had no addresses")
               wRL.bind_addresses;
             wRP = wRL.port;
