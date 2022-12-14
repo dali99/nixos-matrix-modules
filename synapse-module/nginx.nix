@@ -206,13 +206,13 @@ in
       '';
     };
     locations."~ ^/_matrix/client/(api/v1|r0|v3)/initialSync$" = {
-      proxyPass = "http://$synapse_initial_sync";
+      proxyPass = "http://synapse_worker_initial_sync";
       extraConfig = ''
         proxy_read_timeout 1h;
       '';
     };
     locations."~ ^/_matrix/client/(api/v1|r0|v3)/rooms/[^/]+/initialSync$" = {
-      proxyPass = "http://$synapse_initial_sync";
+      proxyPass = "http://synapse_worker_initial_sync";
       extraConfig = ''
         proxy_read_timeout 1h;
       '';
