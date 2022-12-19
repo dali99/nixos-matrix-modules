@@ -153,7 +153,7 @@ in
     servers = let
       fedReceivers = getWorkersOfType "fed-receiver";
       socketAddresses = generateSocketAddresses "federation" fedReceivers;
-      in if fedReceivers != [ ] then 
+      in if fedReceivers != { } then 
         lib.genAttrs socketAddresses (_: { })
     else config.services.nginx.upstreams.synapse_master.servers;
     extraConfig = ''
@@ -166,7 +166,7 @@ in
     servers = let
       initialSyncers = getWorkersOfType "initial-sync";
       socketAddresses = generateSocketAddresses "client" initialSyncers;
-    in if initialSyncers != [ ] then
+    in if initialSyncers != { } then
       lib.genAttrs socketAddresses (_: { })
     else config.services.nginx.upstreams.synapse_master.servers;
     extraConfig = ''
@@ -179,7 +179,7 @@ in
     servers = let
       normalSyncers = getWorkersOfType "normal-sync";
       socketAddresses = generateSocketAddresses "client" normalSyncers;
-    in if normalSyncers != [ ] then
+    in if normalSyncers != { } then
       lib.genAttrs socketAddresses (_: { })
     else config.services.nginx.upstreams.synapse_master.servers;
     extraConfig = ''
@@ -192,7 +192,7 @@ in
     servers = let
       workers = getWorkersOfType "user-dir";
       socketAddresses = generateSocketAddresses "client" workers;
-    in if workers != [ ] then
+    in if workers != { } then
       lib.genAttrs socketAddresses (_: { })
     else config.services.nginx.upstreams.synapse_master.servers;
   };
