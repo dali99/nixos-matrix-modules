@@ -22,17 +22,15 @@
 
   genAttrs' = items: f: g: builtins.listToAttrs (map (i: lib.nameValuePair (f i) (g i)) items);
 
-  isReplicationListener =
-    l: lib.any (r: lib.any (n: n == "replication") r.names) l.resources;
+  isListenerType = type: l: lib.any (r: lib.any (n: n == type) r.names) l.resources;
+  firstListenerOfType = type: w: lib.lists.findFirst (isListenerType type)
+    (throw' "No listener with resource: ${type} configured")
+    w.settings.listeners;
+  listenerHost = l: builtins.head l.bind_addresses;
+  listenerPort = l: l.port;
+  socketAddressOfType = type: w: let l = firstListenerOfType type w; in "${listenerHost l}:${listenerPort l}";
 
-  mainReplicationListener = lib.lists.findFirst isReplicationListener
-    (throw' "No replication listener configured!")
-    cfg.settings.listeners;
-  mainReplicationListenerHost =
-    if mainReplicationListener.bind_addresses == []
-      then throw' "Replication listener had no addresses"
-      else builtins.head mainReplicationListener.bind_addresses;
-  mainReplicationListenerPort = mainReplicationListener.port;
+  mainReplicationListener = firstListenerOfType "replication" cfg;
 in {
   # See https://github.com/matrix-org/synapse/blob/develop/docs/workers.md for more info
   options.services.matrix-synapse-next.workers = let
@@ -186,16 +184,16 @@ in {
     mainReplicationHost = mkOption {
       type = types.str;
       default =
-        if builtins.elem mainReplicationListenerHost [ "0.0.0.0" "::" ]
+        if builtins.elem (listenerHost mainReplicationListener) [ "0.0.0.0" "::" ]
           then "127.0.0.1"
-          else mainReplicationListenerHost;
+          else listenerHost mainReplicationListener;
       # TODO: add defaultText
       description = "Host of the main synapse instance's replication listener";
     };
 
     mainReplicationPort = mkOption {
       type = types.port;
-      default = mainReplicationListenerPort;
+      default = listenerPort mainReplicationListener;
       # TODO: add defaultText
       description = "Port for the main synapse instance's replication listener";
     };
@@ -260,15 +258,10 @@ in {
       instance_map = genAttrs' (lib.lists.range 1 wcfg.eventPersisters)
         (i: "auto-event-persist${toString i}")
         (i: let
-          wRL = lib.lists.findFirst isReplicationListener
-            (throw' "No replication listener configured!")
-            wcfg.instances."auto-event-persist${toString i}".settings.worker_listeners;
-          wRH = lib.findFirst (x: true) (throw' "Replication listener had no addresses")
-            wRL.bind_addresses;
-          wRP = wRL.port;
+          wRL = firstListenerOfType "replication" wcfg.instances."auto-event-persist${toString i}".settings.worker_listeners;
         in {
-          host = wRH;
-          port = wRP;
+          host = listenerHost wRL;
+          port = listenerPort wRL;
         });
 
       stream_writers.events =
