@@ -1,3 +1,4 @@
+{ matrix-lib }:
 { pkgs, lib, config, ... }:
 let
   cfg = config.services.matrix-synapse-next;
@@ -31,7 +32,7 @@ in
   imports = [
     ./nginx.nix
     (import ./workers.nix {
-      inherit throw' format matrix-synapse-common-config pluginsEnv;
+      inherit matrix-lib throw' format matrix-synapse-common-config pluginsEnv;
     })
   ];
 

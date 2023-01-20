@@ -1,4 +1,5 @@
 { matrix-synapse-common-config,
+  matrix-lib,
   pluginsEnv,
   throw',
   format
@@ -22,15 +23,7 @@
 
   genAttrs' = items: f: g: builtins.listToAttrs (map (i: lib.nameValuePair (f i) (g i)) items);
 
-  isListenerType = type: l: lib.any (r: lib.any (n: n == type) r.names) l.resources;
-  firstListenerOfType = type: w: lib.lists.findFirst (isListenerType type)
-    (throw' "No listener with resource: ${type} configured")
-    w.settings.listeners;
-  listenerHost = l: builtins.head l.bind_addresses;
-  listenerPort = l: l.port;
-  socketAddressOfType = type: w: let l = firstListenerOfType type w; in "${listenerHost l}:${listenerPort l}";
-
-  mainReplicationListener = firstListenerOfType "replication" cfg;
+  mainReplicationListener = matrix-lib.firstListenerOfType "replication" cfg.settings.listeners;
 in {
   # See https://github.com/matrix-org/synapse/blob/develop/docs/workers.md for more info
   options.services.matrix-synapse-next.workers = let
@@ -183,17 +176,20 @@ in {
   in {
     mainReplicationHost = mkOption {
       type = types.str;
-      default =
-        if builtins.elem (listenerHost mainReplicationListener) [ "0.0.0.0" "::" ]
+      default = let
+        host = (matrix-lib.connectionInfo mainReplicationListener).host;
+      in
+        # To avoid connecting to 0.0.0.0 and so on
+        if builtins.elem host [ "0.0.0.0" "::" ]
           then "127.0.0.1"
-          else listenerHost mainReplicationListener;
+          else host;
       # TODO: add defaultText
       description = "Host of the main synapse instance's replication listener";
     };
 
     mainReplicationPort = mkOption {
       type = types.port;
-      default = listenerPort mainReplicationListener;
+      default = mainReplicationListener.port;
       # TODO: add defaultText
       description = "Port for the main synapse instance's replication listener";
     };
@@ -258,11 +254,8 @@ in {
       instance_map = genAttrs' (lib.lists.range 1 wcfg.eventPersisters)
         (i: "auto-event-persist${toString i}")
         (i: let
-          wRL = firstListenerOfType "replication" wcfg.instances."auto-event-persist${toString i}".settings.worker_listeners;
-        in {
-          host = listenerHost wRL;
-          port = listenerPort wRL;
-        });
+          wRL = matrix-lib.firstListenerOfType "replication" wcfg.instances."auto-event-persist${toString i}".settings.worker_listeners;
+        in matrix-lib.connectionInfo wRL);
 
       stream_writers.events =
         mkIf (wcfg.eventPersisters > 0)
