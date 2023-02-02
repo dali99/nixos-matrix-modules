@@ -226,6 +226,7 @@ in {
     eventPersisters = mkWorkerCountOption "event-persister";
 
     useUserDirectoryWorker = mkEnableOption "user directory worker";
+    usePresenceStreamWriter = mkEnableOption "prescence stream writer";
 
     instances = mkOption {
       type = types.attrsOf workerInstanceType;
@@ -302,6 +303,11 @@ in {
         "user-dir" = {
           numberOfWorkers = 1;
           nameFn = _: "auto-user-dir";
+        };
+      }) // (lib.optionalAttrs wcfg.usePresenceStreamWriter {
+        "stream-presence" = {
+          numberOfWorkers = 1;
+          nameFn = _: "auto-stream-presence";
         };
       });
 

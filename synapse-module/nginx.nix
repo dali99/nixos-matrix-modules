@@ -117,6 +117,7 @@ in
         synapse_federation_transaction synapse_worker_federation;
 
         synapse_client_user-dir synapse_worker_user-dir;
+        synapse_client_presence synapse_worker_stream-presence;
       }
 
       # from https://github.com/tswfi/synapse/commit/b3704b936663cc692241e978dce4ac623276b1a6
@@ -187,6 +188,14 @@ in
       '';
     };
 
+    services.nginx.upstreams.synapse_worker_stream-presence = {
+      servers = let
+        workers = getWorkersOfType "stream-presence";
+        socketAddresses = generateSocketAddresses "client" workers;
+      in if workers != { } then
+        lib.genAttrs socketAddresses (_: { })
+      else config.services.nginx.upstreams.synapse_master.servers;
+    };
 
     services.nginx.upstreams.synapse_worker_user-dir = {
       servers = let
