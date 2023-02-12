@@ -227,7 +227,7 @@ in
           proxy_read_timeout 1h;
         '';
       };
-      locations."/_synapse/client" = {
+      locations."/_synapse" = {
         proxyPass = "http://$synapse_backend";
       };
     };
