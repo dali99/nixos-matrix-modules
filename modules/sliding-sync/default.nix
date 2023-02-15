@@ -1,5 +1,4 @@
-{ pkgs }:
-{ config, lib, pkgs ? pkgs, ... }:
+{ config, lib, pkgs, ... }:
 let
   cfg = config.services.matrix-next.sliding-sync;
   inherit (lib)
@@ -14,7 +13,7 @@ in
     package = mkOption {
       type = types.package;
       description = "The sliding sync proxy package to use";
-      default = pkgs.matrix-next.sliding-sync;
+      default = pkgs.callPackage ../../packages/sliding-sync { };
       defaultText = "pkgs.matrix-next.sliding-sync";
     };
 
