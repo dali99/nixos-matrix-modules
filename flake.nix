@@ -7,11 +7,19 @@
   };
 
   outputs = { self, nixpkgs, flake-utils }: {
-    nixosModules = {
+    nixosModules = let
+      pkgs = import nixpkgs { overlays = [ self.overlays.default ]; };
+    in {
       synapse = import ./modules/synapse;
+      sliding-sync = import ./modules/sliding-sync { inherit pkgs; };
     };
     lib = import ./lib.nix { inherit (nixpkgs) lib; };
   } // 
+  {
+    overlays.default = (final: prev: {
+      matrix-next.sliding-sync = final.callPackage ./packages/sliding-sync { };
+    });
+  } //
   flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs = nixpkgs.legacyPackages.${system};

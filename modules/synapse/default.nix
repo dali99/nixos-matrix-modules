@@ -65,6 +65,8 @@ in
       '';
     };
 
+    enableSlidingSync = mkEnableOption "the experimental sliding sync proxy";
+
     enableNginx = mkEnableOption "The synapse module managing nginx";
 
     public_baseurl = mkOption {
@@ -393,6 +395,20 @@ in
           Restart = "on-failure";
         };
       };
+    };
+
+    services.matrix-synapse-next.settings.extra_well_known_client_content."org.matrix.msc3575.proxy" = mkIf cfg.enableSlidingSync {
+      url = config.services.matrix-next.sliding-sync.publicBaseUrl;
+    };
+
+    services.matrix-next.sliding-sync = mkIf cfg.enableSlidingSync {
+      enable = true;
+      enableNginx = cfg.enableNginx;
+      publicBaseUrl = lib.mkDefault "slidingsync.${cfg.settings.server_name}";
+
+      server = lib.mkDefault "https://${cfg.public_baseurl}";
+      bindAddress = lib.mkDefault "127.0.0.1:8009";
+      metricsAddress = lib.mkIf cfg.settings.enable_metrics (lib.mkDefault "127.0.0.1:9001");
     };
   };
 }

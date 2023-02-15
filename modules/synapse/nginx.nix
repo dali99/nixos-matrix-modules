@@ -230,6 +230,9 @@ in
       locations."/_synapse/client" = {
         proxyPass = "http://$synapse_backend";
       };
+      locations."/.well-known" = {
+        proxyPass = "http://$synapse_backend";
+      };
     };
   };
 }
