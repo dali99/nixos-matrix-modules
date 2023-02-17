@@ -35,6 +35,7 @@ in
     (import ./workers.nix {
       inherit matrix-lib throw' format matrix-synapse-common-config pluginsEnv;
     })
+    ../sliding-sync
   ];
 
   options.services.matrix-synapse-next = {
