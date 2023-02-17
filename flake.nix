@@ -7,7 +7,7 @@
 
   outputs = { self, nixpkgs-lib }: {
     nixosModules = {
-      synapse = import ./synapse-module { matrix-lib = self.lib; };
+      synapse = import ./synapse-module;
     };
     lib = import ./lib.nix { lib = nixpkgs-lib.lib; };
   };
