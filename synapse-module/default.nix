@@ -1,6 +1,7 @@
 { pkgs, lib, config, ... }:
-{ matrix-lib ? (import ../lib.nix { inherit lib; }) }:
-let
+let 
+  matrix-lib = (import ../lib.nix { inherit lib; });
+
   cfg = config.services.matrix-synapse-next;
   wcfg = cfg.workers;
 
