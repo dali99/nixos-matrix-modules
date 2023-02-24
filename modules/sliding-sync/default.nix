@@ -28,12 +28,13 @@ in
     server = mkOption {
       type = types.str;
       description = "URL pointing to client endpoints for the matrix server to proxy";
-      example = "https://matrix-client.matrix.org";
+      default = config.services.matrix-synapse.settings.public_baseurl;
+      defaultText = lib.literalExpression "config.services.matrix-synapse.settings.public_baseurl";
     };
     bindAddress = mkOption {
       type = types.str;
       description = "The ip and port to listen on";
-      default = "0.0.0.0:8008";
+      default = "0.0.0.0:8007";
     };
     metricsAddress = mkOption {
       type = types.str;
@@ -93,10 +94,17 @@ in
       in ''
         set -euo pipefail
         install -m 600 ${envFile} /run/sliding-sync/.env
+      '' + (if (cfg.secretFile == null) then ''
+        if [[ -f /var/lib/matrix-sliding-sync/secretFile ]]; then
+            mkdir -p /var/lib/matrix-sliding-sync
+            echo -n "$(${pkgs.openssl}/bin/openssl rand -hex 32)" > /var/lib/matrix-sliding-sync/secretFile
+        fi
 
+        ${pkgs.replace-secret}/bin/replace-secret '@SYNCV3_SECRET@' "/var/lib/matrix-sliding-sync/secretFile" /run/sliding-sync/.env
+      '' else ''
         ${pkgs.replace-secret}/bin/replace-secret '@SYNCV3_SECRET@' '${cfg.secretFile}' /run/sliding-sync/.env
-      '' + (if (cfg.database.passwordFile != null) then ''
-        ${pkgs.replace-secret}/bin/replace-secret '@DB_PASSWORD@' '${cfg.secretFile}' /run/sliding-sync/.env
+      '') + (if (cfg.database.passwordFile != null) then ''
+        ${pkgs.replace-secret}/bin/replace-secret '@DB_PASSWORD@' '${cfg.database.passwordFile}' /run/sliding-sync/.env
       '' else "");
       serviceConfig = {
         User = "matrix-sliding-sync";
