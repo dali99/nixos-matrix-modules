@@ -198,7 +198,7 @@ in
     };
 
     services.nginx.virtualHosts."${cfg.public_baseurl}" = {
-      enableACME = true;
+      enableACME = lib.mkDefault true;
       forceSSL = true;
       locations."/_matrix" = {
         proxyPass = "http://$synapse_backend";
