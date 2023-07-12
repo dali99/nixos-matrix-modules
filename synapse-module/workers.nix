@@ -69,20 +69,6 @@ in {
           default = "synapse.app.generic_worker";
         };
 
-        worker_replication_host = mkOption {
-          type = types.str;
-          default = wcfg.mainReplicationHost;
-          defaultText = literalExpression "${wcfgText}.mainReplicationHost";
-          description = "The replication listeners IP on the main synapse process";
-        };
-
-        worker_replication_http_port = mkOption {
-          type = types.port;
-          default = wcfg.mainReplicationPort;
-          defaultText = literalExpression "${wcfgText}.mainReplicationPort";
-          description = "The replication listeners port on the main synapse process";
-        };
-
         worker_listeners = mkOption {
           type = types.listOf (workerListenerType instanceCfg);
           description = "Listener configuration for the worker, similar to the main synapse listener";
@@ -251,11 +237,18 @@ in {
       federation_sender_instances =
         lib.genList (i: "auto-fed-sender${toString (i + 1)}") wcfg.federationSenders;
 
-      instance_map = genAttrs' (lib.lists.range 1 wcfg.eventPersisters)
+      instance_map = (lib.mkIf (cfg.workers.instances != { }) ({
+        main = let
+          host = lib.head mainReplicationListener.bind_addresses;
+        in {
+          host = if builtins.elem host [ "0.0.0.0" "::"] then "127.0.0.1" else host;
+          port = mainReplicationListener.port;
+        };
+      } // genAttrs' (lib.lists.range 1 wcfg.eventPersisters)
         (i: "auto-event-persist${toString i}")
         (i: let
           wRL = matrix-lib.firstListenerOfType "replication" wcfg.instances."auto-event-persist${toString i}".settings.worker_listeners;
-        in matrix-lib.connectionInfo wRL);
+        in matrix-lib.connectionInfo wRL)));
 
       stream_writers.events =
         mkIf (wcfg.eventPersisters > 0)
@@ -340,9 +333,11 @@ in {
         wantedBy = [ "matrix-synapse.target" ];
         after = [ "matrix-synapse.service" ];
         requires = [ "matrix-synapse.service" ];
-        environment.PYTHONPATH = lib.makeSearchPathOutput "lib" cfg.package.python.sitePackages [
-          pluginsEnv
-        ];
+        environment = {
+          PYTHONPATH = lib.makeSearchPathOutput "lib" cfg.package.python.sitePackages [
+            pluginsEnv
+          ];
+        };
         serviceConfig = {
           Type = "notify";
           User = "matrix-synapse";
