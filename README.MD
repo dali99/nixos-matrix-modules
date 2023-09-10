@@ -9,6 +9,10 @@ With matrix.YOURDOMAIN pointing at the server:
 
     workers.federationSenders = 1;
     workers.federationReceivers = 1;
+    workers.initialSyncers = 1;
+    workers.normalSyncers = 1;
+    workers.eventPersisters = 2;
+    workers.useUserDirectoryWorker = true;
 
     enableNginx = true;
 
