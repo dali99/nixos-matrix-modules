@@ -35,4 +35,4 @@ With matrix.YOURDOMAIN pointing at the server:
 }
 ```
 
-is ~enough to get a functional matrix-server running one federation sender and one federation receiver
+is ~enough to get a functional matrix-server running with some workers
