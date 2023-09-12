@@ -344,12 +344,12 @@ in {
           Group = "matrix-synapse";
           Slice = "system-matrix-synapse.slice";
           WorkingDirectory = cfg.dataDir;
-          ExecStartPre = pkgs.writers.writeBash "wait-for-synapse" ''
-            # From https://md.darmstadt.ccc.de/synapse-at-work
-            while ! systemctl is-active -q matrix-synapse.service; do
-                sleep 1
-            done
-          '';
+          # ExecStartPre = pkgs.writers.writeBash "wait-for-synapse" ''
+          #   # From https://md.darmstadt.ccc.de/synapse-at-work
+          #   while ! systemctl is-active -q matrix-synapse.service; do
+          #       sleep 1
+          #   done
+          # '';
           ExecStart = let
             flags = lib.cli.toGNUCommandLineShell {} {
               config-path = [ matrix-synapse-common-config (workerConfig worker) ] ++ cfg.extraConfigFiles;
