@@ -84,6 +84,8 @@ in
       description = "A yaml python logging config file";
     };
 
+    enableSlidingSync = mkEnableOption (lib.mdDoc "automatic Sliding Sync setup at `slidingsync.<domain>`");
+
     settings = mkOption {
       type = types.submodule {
         freeformType = format.type;
@@ -392,6 +394,20 @@ in
           ExecReload = "${pkgs.utillinux}/bin/kill -HUP $MAINPID";
           Restart = "on-failure";
         };
+      };
+    };
+
+    services.matrix-synapse-next.settings.extra_well_known_client_content."org.matrix.msc3575.proxy" = mkIf cfg.enableSlidingSync {
+      url = "https://${config.services.matrix-synapse.sliding-sync.publicBaseUrl}";
+    };
+    services.matrix-synapse.sliding-sync = mkIf cfg.enableSlidingSync {
+      enable = true;
+      enableNginx = lib.mkDefault cfg.enableNginx;
+      publicBaseUrl = lib.mkDefault "slidingsync.${cfg.settings.server_name}";
+
+      settings = {
+        SYNCV3_SERVER = lib.mkDefault "https://${cfg.public_baseurl}";
+        SYNCV3_PROM = lib.mkIf cfg.settings.enable_metrics (lib.mkDefault "127.0.0.1:9001");
       };
     };
   };
