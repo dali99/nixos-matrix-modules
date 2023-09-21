@@ -50,5 +50,5 @@ matrix-synapse.sliding-sync.environmentFile = "/some/file/containing/SYNCV3_SECR
 
 ```
 
-If using well-known delagation make sure `YOURDOMAIN/.well-known/matrix/client` matches
+If using [well-known delagation](https://matrix-org.github.io/synapse/v1.37/delegate.html) make sure `YOURDOMAIN/.well-known/matrix/client` matches
 what's in `matrix.YOURDOMAIN/.well-known/matrix/client`
