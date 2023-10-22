@@ -46,7 +46,7 @@ services.matrix-synapse-next = {
   enableSlidingSync = true;
 };
 
-matrix-synapse.sliding-sync.environmentFile = "/some/file/containing/SYNCV3_SECRET=<some secret>";
+services.matrix-synapse.sliding-sync.environmentFile = "/some/file/containing/SYNCV3_SECRET=<some secret>";
 
 ```
 
