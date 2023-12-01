@@ -1,6 +1,6 @@
 { matrix-synapse-common-config,
   matrix-lib,
-  pluginsEnv,
+  wrapped,
   throw',
   format
 }:
@@ -333,11 +333,6 @@ in {
         wantedBy = [ "matrix-synapse.target" ];
         after = [ "matrix-synapse.service" ];
         requires = [ "matrix-synapse.service" ];
-        environment = {
-          PYTHONPATH = lib.makeSearchPathOutput "lib" cfg.package.python.sitePackages [
-            pluginsEnv
-          ];
-        };
         serviceConfig = {
           Type = "notify";
           User = "matrix-synapse";
@@ -355,7 +350,7 @@ in {
               config-path = [ matrix-synapse-common-config (workerConfig worker) ] ++ cfg.extraConfigFiles;
               keys-directory = cfg.dataDir;
             };
-          in "${cfg.package}/bin/synapse_worker ${flags}";
+          in "${wrapped}/bin/synapse_worker ${flags}";
         };
       };
     }));

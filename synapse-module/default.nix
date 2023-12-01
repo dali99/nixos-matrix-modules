@@ -11,8 +11,22 @@ let
 
   format = pkgs.formats.yaml {};
   matrix-synapse-common-config = format.generate "matrix-synapse-common-config.yaml" cfg.settings;
-  pluginsEnv = cfg.package.python.buildEnv.override {
-    extraLibs = cfg.plugins;
+
+  # TODO: Align better with the upstream module
+  wrapped = cfg.package.override { 
+    inherit (cfg) plugins;
+    extras = [
+      "postgres"
+      "saml2"
+      "oidc"
+      "systemd"
+      "url-preview"
+      "sentry"
+      "jwt"
+      "redis"
+      "cache-memory"
+      "user-search"
+    ];
   };
 
   inherit (lib)
@@ -33,7 +47,7 @@ in
   imports = [
     ./nginx.nix
     (import ./workers.nix {
-      inherit matrix-lib throw' format matrix-synapse-common-config pluginsEnv;
+      inherit matrix-lib throw' format matrix-synapse-common-config wrapped;
     })
   ];
 
@@ -376,9 +390,6 @@ in
           };
         in "${cfg.package}/bin/synapse_homeserver ${flags}";
 
-        environment.PYTHONPATH =
-          lib.makeSearchPathOutput "lib" cfg.package.python.sitePackages [ pluginsEnv ];
-
         serviceConfig = {
           Type = "notify";
           User = "matrix-synapse";
@@ -390,7 +401,7 @@ in
               config-path = [ matrix-synapse-common-config ] ++ cfg.extraConfigFiles;
               keys-directory = cfg.dataDir;
             };
-          in "${cfg.package}/bin/synapse_homeserver ${flags}";
+          in "${wrapped}/bin/synapse_homeserver ${flags}";
           ExecReload = "${pkgs.utillinux}/bin/kill -HUP $MAINPID";
           Restart = "on-failure";
         };
