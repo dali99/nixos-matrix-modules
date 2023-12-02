@@ -11,7 +11,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.callPackage ../pkgs/matrix-sliding-sync { };
+      default = pkgs.matrix-sliding-sync;
       description = "What package to use for the sliding-sync proxy.";
     };
 
