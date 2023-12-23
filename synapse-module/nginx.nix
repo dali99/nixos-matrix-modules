@@ -2,13 +2,52 @@
 let
   cfg = config.services.matrix-synapse-next;
 
-  getWorkersOfType = type: lib.filterAttrs (_: w: w.type == type) cfg.workers.instances;
-  isListenerType = type: listener: lib.lists.any (r: lib.lists.any (n: n == type) r.names) listener.resources;
-  firstListenerOfType = type: worker: lib.lists.findFirst (isListenerType type) (throw "No federation endpoint on receiver") worker.settings.worker_listeners;
-  wAddressOfType = type: w: lib.lists.findFirst (_: true) (throw "No address in receiver") (firstListenerOfType type w).bind_addresses;
-  wPortOfType = type: w: (firstListenerOfType type w).port;
-  wSocketAddressOfType = type: w: "${wAddressOfType type w}:${builtins.toString (wPortOfType type w)}";
-  generateSocketAddresses = type: workers: lib.mapAttrsToList (_: w: "${wSocketAddressOfType type w}") workers;
+  mapWorkersToUpstreamsByType = workerInstances: lib.pipe workerInstances [
+    lib.attrValues
+
+    # Index by worker type
+    (lib.foldl (acc: worker: acc // {
+      ${worker.type} = (acc.${worker.type} or [ ]) ++ [ worker ];
+    }) { })
+
+    # Subindex by listener type (listener names), and convert to upstreams
+    (lib.mapAttrs (_: workers: lib.pipe workers [
+      (lib.concatMap (worker: worker.settings.worker_listeners))
+      lib.flatten
+      mapListenersToUpstreamsByType
+    ]))
+  ];
+
+  mapListenersToUpstreamsByType = listenerInstances: lib.pipe listenerInstances [
+    # Index by listener type (listener names)
+    (lib.concatMap (listener: lib.pipe listener [
+      (listener: let
+        allResourceNames = lib.pipe listener.resources [
+          (map (resource: resource.names))
+          lib.flatten
+          lib.unique
+        ];
+      in if allResourceNames == [ ]
+        then { "empty" = listener; }
+        else lib.genAttrs allResourceNames (_: listener))
+      lib.attrsToList
+    ]))
+
+    (lib.foldl (acc: listener: acc // {
+      ${listener.name} = (acc.${listener.name} or [ ]) ++ [ listener.value ];
+    }) { })
+
+    # Convert listeners to upstream URIs
+    (lib.mapAttrs (_: listeners: lib.pipe listeners [
+      (lib.concatMap (listener:
+        (map (addr: "${addr}:${toString listener.port}") listener.bind_addresses)
+      ))
+      (uris: lib.genAttrs uris (_: { }))
+    ]))
+  ];
+
+  workerUpstreams = mapWorkersToUpstreamsByType cfg.workers.instances;
+  listenerUpstreams = mapListenersToUpstreamsByType cfg.settings.listeners;
 in
 {
   config = lib.mkIf cfg.enableNginx {
@@ -138,24 +177,17 @@ in
     '';
 
     services.nginx.upstreams.synapse_master.servers = let
-      isMainListener = l: isListenerType "client" l && isListenerType "federation" l;
-      firstMainListener = lib.findFirst isMainListener
-        (throw "No catch-all listener configured") cfg.settings.listeners;
-        address = lib.findFirst (_: true) (throw "No address in main listener") firstMainListener.bind_addresses;
-        port = firstMainListener.port;
-        socketAddress = "${address}:${builtins.toString port}";
-    in {
-      "${socketAddress}" = { };
-    };
+      mainListeners = builtins.intersectAttrs
+        (listenerUpstreams."client" or { })
+        (listenerUpstreams."federation" or { });
+    in
+      assert lib.assertMsg (mainListeners != { })
+        "No catch-all listener configured, or listener is not bound to an address";
+        mainListeners;
 
 
     services.nginx.upstreams.synapse_worker_federation = {
-      servers = let
-        fedReceivers = getWorkersOfType "fed-receiver";
-        socketAddresses = generateSocketAddresses "federation" fedReceivers;
-        in if fedReceivers != { } then
-          lib.genAttrs socketAddresses (_: { })
-      else config.services.nginx.upstreams.synapse_master.servers;
+      servers = workerUpstreams.fed-receiver.federation or config.services.nginx.upstreams.synapse_master.servers;
       extraConfig = ''
         ip_hash;
       '';
@@ -163,12 +195,7 @@ in
 
 
     services.nginx.upstreams.synapse_worker_initial_sync = {
-      servers = let
-        initialSyncers = getWorkersOfType "initial-sync";
-        socketAddresses = generateSocketAddresses "client" initialSyncers;
-      in if initialSyncers != { } then
-        lib.genAttrs socketAddresses (_: { })
-      else config.services.nginx.upstreams.synapse_master.servers;
+      servers = workerUpstreams.initial-sync.client or config.services.nginx.upstreams.synapse_master.servers;
       extraConfig = ''
         hash $mxid_localpart consistent;
       '';
@@ -176,12 +203,7 @@ in
 
 
     services.nginx.upstreams.synapse_worker_normal_sync = {
-      servers = let
-        normalSyncers = getWorkersOfType "normal-sync";
-        socketAddresses = generateSocketAddresses "client" normalSyncers;
-      in if normalSyncers != { } then
-        lib.genAttrs socketAddresses (_: { })
-      else config.services.nginx.upstreams.synapse_master.servers;
+      servers = workerUpstreams.normal-sync.client or config.services.nginx.upstreams.synapse_master.servers;
       extraConfig = ''
         hash $mxid_localpart consistent;
       '';
@@ -189,12 +211,7 @@ in
 
 
     services.nginx.upstreams.synapse_worker_user-dir = {
-      servers = let
-        workers = getWorkersOfType "user-dir";
-        socketAddresses = generateSocketAddresses "client" workers;
-      in if workers != { } then
-        lib.genAttrs socketAddresses (_: { })
-      else config.services.nginx.upstreams.synapse_master.servers;
+      servers = workerUpstreams.user-dir.client or config.services.nginx.upstreams.synapse_master.servers;
     };
 
     services.nginx.virtualHosts."${cfg.public_baseurl}" = {
