@@ -10,7 +10,9 @@ let
   wcfgText = "config.services.matrix-synapse-next.workers";
 
   format = pkgs.formats.yaml {};
-  matrix-synapse-common-config = format.generate "matrix-synapse-common-config.yaml" cfg.settings;
+  matrix-synapse-common-config = format.generate "matrix-synapse-common-config.yaml" (cfg.settings // {
+    listeners = map (lib.filterAttrsRecursive (_: v: v != null)) cfg.settings.listeners;
+  });
 
   # TODO: Align better with the upstream module
   wrapped = cfg.package.override { 
@@ -79,6 +81,15 @@ in
       '';
     };
 
+    socketDir = mkOption {
+      type = types.path;
+      default = "/run/matrix-synapse";
+      description = ''
+        The directory where matrix-synapse by default stores the sockets of
+        all listeners that bind to UNIX sockets.
+      '';
+    };
+
     enableNginx = mkEnableOption "The synapse module managing nginx";
 
     public_baseurl = mkOption {
@@ -135,14 +146,42 @@ in
             type = types.listOf (types.submodule {
               options = {
                 port = mkOption {
-                  type = types.port;
-                  description = "The TCP port to bind to";
+                  type = with types; nullOr types.port;
+                  default = null;
+                  description = ''
+                    The TCP port to bind to.
+
+                    ::: {.note}
+                      This option will be ignored if {option}`path` is set to a non-null value.
+                    :::
+                  '';
                   example = 8448;
+                };
+
+                path = mkOption {
+                  type = with types; nullOr path;
+                  default = null;
+                  description = ''
+                    The UNIX socket to bind to.
+
+                    ::: {.note}
+                      This option will override {option}`bind_addresses` and {option}`port`
+                      if set to a non-null value.
+                    :::
+                  '';
+                  example = literalExpression ''''${${cfgText}.socketDir}/matrix-synapse.sock'';
                 };
 
                 bind_addresses = mkOption {
                   type = types.listOf types.str;
-                  description = "A list of local addresses to listen on";
+                  default = [ ];
+                  description = ''
+                    A list of local addresses to listen on.
+
+                    ::: {.note}
+                      This option will be ignored if {option}`path` is set to a non-null value.
+                    :::
+                  '';
                 };
 
                 type = mkOption {
@@ -201,16 +240,14 @@ in
             # TODO: add defaultText
             default = [
               {
-                port = 8008;
-                bind_addresses = [ "127.0.0.1" ];
+                path = "${cfg.socketDir}/matrix-synapse.sock";
                 resources = [
                   { names = [ "client" ]; compress = true; }
                   { names = [ "federation" ]; compress = false; }
                 ];
               }
               (mkIf (wcfg.instances != { }) {
-                port = 9093;
-                bind_addresses = [ "127.0.0.1" ];
+                path = "${cfg.socketDir}/matrix-synapse-replication.sock";
                 resources = [
                   {  names = [ "replication" ]; }
                 ];
@@ -352,6 +389,12 @@ in
   };
 
   config = mkIf cfg.enable {
+    assertions = [ ]
+      ++ (map (l: {
+        assertion = l.path == null -> (l.bind_addresses != [ ] && l.port != null);
+        message = "Some listeners are missing either a socket path or a bind_address + port to listen on";
+      }) cfg.settings.listeners);
+
     users.users.matrix-synapse = {
       group = "matrix-synapse";
       home = cfg.dataDir;
@@ -396,6 +439,8 @@ in
           Group = "matrix-synapse";
           Slice = "system-matrix-synapse.slice";
           WorkingDirectory = cfg.dataDir;
+          StateDirectory = "matrix-synapse";
+          RuntimeDirectory = "matrix-synapse";
           ExecStart = let
             flags = lib.cli.toGNUCommandLineShell {} {
               config-path = [ matrix-synapse-common-config ] ++ cfg.extraConfigFiles;

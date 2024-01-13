@@ -86,8 +86,15 @@ in {
         };
 
         port = mkOption {
-          type = types.port;
+          type = with types; nullOr port;
+          default = null;
           description = "The TCP port to bind to";
+        };
+
+        path = mkOption {
+          type = with types; nullOr path;
+          default = null;
+          description = "The UNIX socket to bind to";
         };
 
         bind_addresses = mkOption {
@@ -161,7 +168,7 @@ in {
     };
   in {
     mainReplicationHost = mkOption {
-      type = types.str;
+      type = with types; nullOr str;
       default = let
         host = (matrix-lib.connectionInfo mainReplicationListener).host;
       in
@@ -174,16 +181,30 @@ in {
     };
 
     mainReplicationPort = mkOption {
-      type = types.port;
+      type = with types; nullOr port;
       default = mainReplicationListener.port;
       # TODO: add defaultText
       description = "Port for the main synapse instance's replication listener";
+    };
+
+    mainReplicationPath = mkOption {
+      type = with types; nullOr path;
+      default = mainReplicationListener.path;
+      # TODO: add defaultText
+      description = "Path to the UNIX socket of the main synapse instance's replication listener";
     };
 
     defaultListenerAddress = mkOption {
       type = types.str;
       default = "127.0.0.1";
       description = "The default listener address for the worker";
+    };
+
+    workersUsePath = mkOption {
+      type = types.bool;
+      description = "Whether to enable UNIX sockets for all automatically generated workers";
+      default = true;
+      example = false;
     };
 
     workerStartingPort = mkOption {
@@ -233,22 +254,32 @@ in {
   };
 
   config = {
+    assertions = [ ]
+      ++ (lib.concatMap (worker:
+        (map (l: {
+          assertion = l.path == null -> (l.bind_addresses != [ ] && l.port != null);
+          message = "At least one worker listener is missing either a socket path or a bind_address + port to listen on";
+        }) worker.settings.worker_listeners)
+      ) (lib.attrValues wcfg.instances));
+
     services.matrix-synapse-next.settings = {
       federation_sender_instances =
         lib.genList (i: "auto-fed-sender${toString (i + 1)}") wcfg.federationSenders;
 
       instance_map = (lib.mkIf (cfg.workers.instances != { }) ({
-        main = let
-          host = lib.head mainReplicationListener.bind_addresses;
-        in {
-          host = if builtins.elem host [ "0.0.0.0" "::"] then "127.0.0.1" else host;
-          port = mainReplicationListener.port;
+        main = if wcfg.mainReplicationPath != null then {
+          path = wcfg.mainReplicationPath;
+        } else {
+          host = wcfg.mainReplicationHost;
+          port = wcfg.mainReplicationPort;
         };
       } // genAttrs' (lib.lists.range 1 wcfg.eventPersisters)
         (i: "auto-event-persist${toString i}")
         (i: let
           wRL = matrix-lib.firstListenerOfType "replication" wcfg.instances."auto-event-persist${toString i}".settings.worker_listeners;
-        in matrix-lib.connectionInfo wRL)));
+        in if wRL.path != null then {
+          inherit (wRL) path;
+        } else matrix-lib.connectionInfo wRL)));
 
       stream_writers.events =
         mkIf (wcfg.eventPersisters > 0)
@@ -260,10 +291,15 @@ in {
 
     services.matrix-synapse-next.workers.instances = let
       sum = lib.foldl lib.add 0;
-      workerListenersWithMetrics = portOffset:
-        lib.singleton ({
-          port = wcfg.workerStartingPort + portOffset - 1;
-        }) 
+      workerListenersWithMetrics = portOffset: name:
+        [(if wcfg.workersUsePath
+          then {
+            path = "${cfg.socketDir}/matrix-synapse-worker-${name}.sock";
+          }
+          else {
+            port = wcfg.workerStartingPort + portOffset - 1;
+          }
+        )]
         ++ lib.optional wcfg.enableMetrics {
           port = wcfg.metricsStartingPort + portOffset;
           resources = [ { names = [ "metrics" ]; } ];
@@ -274,7 +310,7 @@ in {
         numberOfWorkers,
         portOffset ? 0,
         nameFn ? i: "auto-${type}${toString i}",
-        workerListenerFn ? i: workerListenersWithMetrics (portOffset + i)
+        workerListenerFn ? i: name: workerListenersWithMetrics (portOffset + i) name
       }: genAttrs'
         (lib.lists.range 1 numberOfWorkers)
         nameFn
@@ -282,7 +318,7 @@ in {
           isAuto = true;
           inherit type;
           index = i;
-          settings.worker_listeners = workerListenerFn i;
+          settings.worker_listeners = workerListenerFn i (nameFn i);
         });
 
       workerInstances = {
@@ -323,8 +359,13 @@ in {
 
     systemd.services = let
       workerList = lib.mapAttrsToList lib.nameValuePair wcfg.instances;
-      workerConfig = worker: format.generate "matrix-synapse-worker-${worker.name}-config.yaml"
-        (worker.value.settings // { worker_name = worker.name; });
+      workerConfig = worker:
+        format.generate "matrix-synapse-worker-${worker.name}-config.yaml"
+        (worker.value.settings // {
+          worker_name = worker.name;
+          worker_listeners =
+            map (lib.filterAttrsRecursive (_: v: v != null)) worker.value.settings.worker_listeners;
+        });
     in builtins.listToAttrs (lib.flip map workerList (worker: {
       name = "matrix-synapse-worker-${worker.name}";
       value = {
@@ -339,6 +380,8 @@ in {
           Group = "matrix-synapse";
           Slice = "system-matrix-synapse.slice";
           WorkingDirectory = cfg.dataDir;
+          RuntimeDirectory = "matrix-synapse";
+          StateDirectory = "matrix-synapse";
           ExecStartPre = pkgs.writers.writeBash "wait-for-synapse" ''
             # From https://md.darmstadt.ccc.de/synapse-at-work
             while ! systemctl is-active -q matrix-synapse.service; do
