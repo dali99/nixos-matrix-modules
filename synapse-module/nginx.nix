@@ -40,7 +40,9 @@ let
     # Convert listeners to upstream URIs
     (lib.mapAttrs (_: listeners: lib.pipe listeners [
       (lib.concatMap (listener:
-        (map (addr: "${addr}:${toString listener.port}") listener.bind_addresses)
+        if listener.path != null
+          then [ "unix:${listener.path}" ]
+          else (map (addr: "${addr}:${toString listener.port}") listener.bind_addresses)
       ))
       (uris: lib.genAttrs uris (_: { }))
     ]))
