@@ -2,13 +2,10 @@
 let
   cfg = config.services.matrix-synapse-next;
 
-  getWorkersOfType = type: lib.filterAttrs (_: w: w.type == type) cfg.workers.instances;
-  isListenerType = type: listener: lib.lists.any (r: lib.lists.any (n: n == type) r.names) listener.resources;
-  firstListenerOfType = type: worker: lib.lists.findFirst (isListenerType type) (throw "No federation endpoint on receiver") worker.settings.worker_listeners;
-  wAddressOfType = type: w: lib.lists.findFirst (_: true) (throw "No address in receiver") (firstListenerOfType type w).bind_addresses;
-  wPortOfType = type: w: (firstListenerOfType type w).port;
-  wSocketAddressOfType = type: w: "${wAddressOfType type w}:${builtins.toString (wPortOfType type w)}";
-  generateSocketAddresses = type: workers: lib.mapAttrsToList (_: w: "${wSocketAddressOfType type w}") workers;
+  matrix-lib = (import ../lib.nix { inherit lib; });
+
+  workerUpstreams = matrix-lib.mapWorkersToUpstreamsByType cfg.workers.instances;
+  listenerUpstreams = matrix-lib.mapListenersToUpstreamsByType cfg.settings.listeners;
 in
 {
   config = lib.mkIf cfg.enableNginx {
@@ -138,24 +135,17 @@ in
     '';
 
     services.nginx.upstreams.synapse_master.servers = let
-      isMainListener = l: isListenerType "client" l && isListenerType "federation" l;
-      firstMainListener = lib.findFirst isMainListener
-        (throw "No catch-all listener configured") cfg.settings.listeners;
-        address = lib.findFirst (_: true) (throw "No address in main listener") firstMainListener.bind_addresses;
-        port = firstMainListener.port;
-        socketAddress = "${address}:${builtins.toString port}";
-    in {
-      "${socketAddress}" = { };
-    };
+      mainListeners = builtins.intersectAttrs
+        (listenerUpstreams.client.http or { })
+        (listenerUpstreams.federation.http or { });
+    in
+      assert lib.assertMsg (mainListeners != { })
+        "No catch-all listener configured, or listener is not bound to an address";
+        mainListeners;
 
 
     services.nginx.upstreams.synapse_worker_federation = {
-      servers = let
-        fedReceivers = getWorkersOfType "fed-receiver";
-        socketAddresses = generateSocketAddresses "federation" fedReceivers;
-        in if fedReceivers != { } then
-          lib.genAttrs socketAddresses (_: { })
-      else config.services.nginx.upstreams.synapse_master.servers;
+      servers = workerUpstreams.fed-receiver.federation.http or config.services.nginx.upstreams.synapse_master.servers;
       extraConfig = ''
         ip_hash;
       '';
@@ -163,12 +153,7 @@ in
 
 
     services.nginx.upstreams.synapse_worker_initial_sync = {
-      servers = let
-        initialSyncers = getWorkersOfType "initial-sync";
-        socketAddresses = generateSocketAddresses "client" initialSyncers;
-      in if initialSyncers != { } then
-        lib.genAttrs socketAddresses (_: { })
-      else config.services.nginx.upstreams.synapse_master.servers;
+      servers = workerUpstreams.initial-sync.client.http or config.services.nginx.upstreams.synapse_master.servers;
       extraConfig = ''
         hash $mxid_localpart consistent;
       '';
@@ -176,12 +161,7 @@ in
 
 
     services.nginx.upstreams.synapse_worker_normal_sync = {
-      servers = let
-        normalSyncers = getWorkersOfType "normal-sync";
-        socketAddresses = generateSocketAddresses "client" normalSyncers;
-      in if normalSyncers != { } then
-        lib.genAttrs socketAddresses (_: { })
-      else config.services.nginx.upstreams.synapse_master.servers;
+      servers = workerUpstreams.normal-sync.client.http or config.services.nginx.upstreams.synapse_master.servers;
       extraConfig = ''
         hash $mxid_localpart consistent;
       '';
@@ -189,12 +169,7 @@ in
 
 
     services.nginx.upstreams.synapse_worker_user-dir = {
-      servers = let
-        workers = getWorkersOfType "user-dir";
-        socketAddresses = generateSocketAddresses "client" workers;
-      in if workers != { } then
-        lib.genAttrs socketAddresses (_: { })
-      else config.services.nginx.upstreams.synapse_master.servers;
+      servers = workerUpstreams.user-dir.client.http or config.services.nginx.upstreams.synapse_master.servers;
     };
 
     services.nginx.virtualHosts."${cfg.public_baseurl}" = {
