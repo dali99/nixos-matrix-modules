@@ -29,6 +29,7 @@ rec {
       # Subindex by resource names, listener types, and convert to upstreams
       (lib.mapAttrs (_: workers: lib.pipe workers [
         (lib.concatMap (worker: worker.settings.worker_listeners))
+        lib.lists.head # only select one listener for the worker to avoid cache thrashing
         lib.flatten
         mapListenersToUpstreamsByType
       ]))
