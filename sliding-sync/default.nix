@@ -89,7 +89,7 @@ in
       ensureDatabases = [ "matrix-sliding-sync" ];
       ensureUsers = [ rec {
         name = "matrix-sliding-sync";
-        ensurePermissions."DATABASE \"${name}\"" = "ALL PRIVILEGES";
+        ensureDBOwnership = true;
       } ];
     };
 
