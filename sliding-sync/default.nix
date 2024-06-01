@@ -107,7 +107,7 @@ in
     };
 
     services.nginx.virtualHosts.${cfg.publicBaseUrl} = lib.mkIf cfg.enableNginx {
-      enableACME = true;
+      enableACME = lib.mkDefault true;
       forceSSL = true;
       locations."/" = {
         proxyPass = lib.replaceStrings [ "0.0.0.0" "::" ] [ "127.0.0.1" "::1" ] "http://${cfg.settings.SYNCV3_BINDADDR}";
