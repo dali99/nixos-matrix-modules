@@ -1,3 +1,5 @@
+For support and requests feel free to join [#nixos-matrix-modules:dodsorf.as](https://matrix.to/#/#nixos-matrix-modules:dodsorf.as), [uri](matrix:r/nixos-matrix-modules:dodsorf.as)
+
 With matrix.YOURDOMAIN pointing at the server:
 
 ```
