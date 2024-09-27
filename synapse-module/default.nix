@@ -395,6 +395,9 @@ in
         message = "Some listeners are missing either a socket path or a bind_address + port to listen on";
       }) cfg.settings.listeners);
 
+    warnings = [ ] ++ lib.optional cfg.enableSlidingSync
+      "the option services.matrix-synapse-next.enableSlidingSync no longer has any effect (and is enabled by default)";
+
     users.users.matrix-synapse = {
       group = "matrix-synapse";
       home = cfg.dataDir;
@@ -450,20 +453,6 @@ in
           ExecReload = "${pkgs.utillinux}/bin/kill -HUP $MAINPID";
           Restart = "on-failure";
         };
-      };
-    };
-
-    services.matrix-synapse-next.settings.extra_well_known_client_content."org.matrix.msc3575.proxy" = mkIf cfg.enableSlidingSync {
-      url = "https://${config.services.matrix-synapse.sliding-sync.publicBaseUrl}";
-    };
-    services.matrix-synapse.sliding-sync = mkIf cfg.enableSlidingSync {
-      enable = true;
-      enableNginx = lib.mkDefault cfg.enableNginx;
-      publicBaseUrl = lib.mkDefault "slidingsync.${cfg.settings.server_name}";
-
-      settings = {
-        SYNCV3_SERVER = lib.mkDefault "https://${cfg.public_baseurl}";
-        SYNCV3_PROM = lib.mkIf cfg.settings.enable_metrics (lib.mkDefault "127.0.0.1:9001");
       };
     };
   };

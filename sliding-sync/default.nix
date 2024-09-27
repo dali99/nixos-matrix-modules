@@ -84,6 +84,15 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    warnings = lib.optionals config.services.matrix-synapse-next.enable [
+      ''
+        services.matrix-synapse.sliding-sync is no longer necessary to use sliding-sync with synapse,
+        and the extra module will be removed from `nixos-matrix-modules` in the future.
+        If you are only using this service via `nixos-matrix-modules` you can safely remove options like
+        `services.matrix-synapse.sliding-sync.environmentFile`.
+      ''
+    ];
+
     services.postgresql = lib.optionalAttrs cfg.createDatabase {
       enable = true;
       ensureDatabases = [ "matrix-sliding-sync" ];
