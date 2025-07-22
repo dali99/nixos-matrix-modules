@@ -27,7 +27,6 @@ let
       "jwt"
       "redis"
       "cache-memory"
-      "user-search"
     ];
   };
 
